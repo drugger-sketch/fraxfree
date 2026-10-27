@@ -10,6 +10,12 @@ st.set_page_config(
     layout="wide"
 )
 
+# --- TRAVA OPCIONAL POR SENHA RÁPIDA ---
+senha = st.sidebar.text_input("🔒 Senha de Acesso:", type="password")
+if senha != "1234":  # Troque "1234" pela sua senha pessoal
+    st.warning("Digite a senha na barra lateral esquerda para liberar a calculadora.")
+    st.stop()
+
 st.markdown("""
 <style>
     .main-header {
