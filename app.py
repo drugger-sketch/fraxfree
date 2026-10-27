@@ -331,7 +331,7 @@ with col_frax:
     tabagismo = st.toggle("Tabagismo atual", value=False)
     corticoide = st.toggle("Uso de Glicocorticoides", value=True)
     ar = st.toggle("Artrite Reumatoide", value=False)
-    osteop_sec = st.toggle("1Osteoporose Secundária", value=False)
+    osteop_sec = st.toggle("Osteoporose Secundária", value=False)
     alcool = st.toggle("Álcool (3 ou mais doses/dia)", value=False)
 
     st.markdown("---")
@@ -555,7 +555,7 @@ with col_res:
         <div style="font-size:12.5px; color:#555; font-weight:bold;">FRAX BRASIL PADRÃO (SEM MODIFICADORES)</div>
         <div style="display:flex; justify-content:space-between; margin-top:6px;">
             <div><span style="font-size:13.5px; color:#222;">Fratura Maior (MOF):</span><br><b style="font-size:22px; color:#222;">{mof_base:.1f}%</b></div>
-            <div><span style="font-size:13.5px; color:#222;">Fratura de Quadril:</span><br><b style="font-size:22px; color:#222;">{hip_base:.1f}%</b></div>
+            <div><span style="font-size:13.5px; color:#222;">Fratura de Quadril (FQ):</span><br><b style="font-size:22px; color:#222;">{hip_base:.1f}%</b></div>
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -567,7 +567,7 @@ with col_res:
         fator_dominante = candidatos_ordenados[0]
 
         st.markdown("##### 🔬 Impacto individual de cada fator ativo isoladamente")
-        linhas_md = "| Fator Modificador (Isolado) | Mult. (MOF / Quad) | MOF Ajustado | Quadril Ajustado |\n"
+        linhas_md = "| Fator Modificador (Isolado) | Mult. (MOF / FQ) | MOF Ajustado | Quadril Ajustado |\n"
         linhas_md += "| :--- | :---: | :---: | :---: |\n"
         for idx, c in enumerate(candidatos_ordenados):
             destaque = "⭐ " if idx == 0 else ""
