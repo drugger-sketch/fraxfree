@@ -371,7 +371,7 @@ with col_frax:
 # COLUNA 2: OS 7 MÓDULOS OFICIAIS DO FRAXPLUS
 # ------------------------------------------
 with col_plus:
-    st.subheader("➕ 2. Fatores Candidatos FRAXplus")
+    st.subheader("➕ 2. Fatores modificadores FRAXplus")
     st.caption("Ative os fatores presentes no caso para comparar o impacto individual de cada um.")
 
     # Módulo 1: Recência e Sítio da Fratura
@@ -547,15 +547,15 @@ if usar_hal and hal_mm is not None:
 # COLUNA 3: TABELA COMPARATIVA, SELETOR DE FATOR ÚNICO E RESULTADO FINAL
 # ------------------------------------------
 with col_res:
-    st.subheader("📊 3. Seleção do Ajuste Único e Resultado")
+    st.subheader("📊 3. Seleção do fator de maior impacto e Resultado")
 
     # 1. Card FRAX Base
     st.markdown(f"""
     <div class="result-card">
         <div style="font-size:12.5px; color:#555; font-weight:bold;">FRAX BRASIL PADRÃO (SEM MODIFICADORES)</div>
         <div style="display:flex; justify-content:space-between; margin-top:6px;">
-            <div><span style="font-size:13.5px;">Fratura Maior (MOF):</span><br><b style="font-size:22px; color:#333;">{mof_base:.1f}%</b></div>
-            <div><span style="font-size:13.5px;">Fratura de Quadril:</span><br><b style="font-size:22px; color:#555;">{hip_base:.1f}%</b></div>
+            <div><span style="font-size:13.5px;">Fratura Maior (MOF):</span><br><b style="font-size:22px; color:#000;">{mof_base:.1f}%</b></div>
+            <div><span style="font-size:13.5px;">Fratura de Quadril:</span><br><b style="font-size:22px; color:#000;">{hip_base:.1f}%</b></div>
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -566,7 +566,7 @@ with col_res:
         candidatos_ordenados = sorted(candidatos_plus, key=lambda x: x["mof_isolado"], reverse=True)
         fator_dominante = candidatos_ordenados[0]
 
-        st.markdown("##### 🔬 Impacto Individual de Cada Fator Ativo (Sem Multiplicação em Cascata)")
+        st.markdown("##### 🔬 Impacto individual de cada fator ativo isoladamente")
         linhas_md = "| Fator Modificador (Isolado) | Mult. (MOF / Quad) | MOF Ajustado | Quadril Ajustado |\n"
         linhas_md += "| :--- | :---: | :---: | :---: |\n"
         for idx, c in enumerate(candidatos_ordenados):
@@ -580,14 +580,14 @@ with col_res:
 
         # Seletor interativo de clique único para o médico escolher qual fator aplicar
         opcoes_radio = [
-            f"⭐ Automático — Fator Dominante: {fator_dominante['nome']} (MOF {fator_dominante['mof_isolado']:.1f}%)"
+            f"⭐ Automático — Fator Dominante: {fator_dominante['nome']} (MOF {fator_dominante['mof_isolado']:.1f}% (FQ {fator_dominante['hip_isolado']:.1f}%)"
         ] + [
             f"{c['nome']} → MOF {c['mof_isolado']:.1f}% | Quadril {c['hip_isolado']:.1f}%"
             for c in candidatos_ordenados
         ]
 
         escolha_medico = st.radio(
-            "👆 Clique no fator único FRAXplus que deseja aplicar ao cálculo final (Regra fraxplus.org):",
+            "👆 Escolha o fator único FRAXplus que deseja aplicar ao cálculo final:",
             options=opcoes_radio,
             index=0,
             help="Seguindo a validação científica de Kanis, McCloskey e Leslie (fraxplus.org), apenas 1 ajuste pós-teste deve ser aplicado por vez para evitar superestimação por colinearidade."
