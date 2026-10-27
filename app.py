@@ -292,9 +292,9 @@ def gerar_svg_grafico_abrasso(idade_pac: int, mof_base: float, mof_plus: float) 
 # INTERFACE PRINCIPAL (SELETOR DE MODO BASE)
 # ==========================================
 modo_calculo = st.radio(
-    "ModoS de Operação (modo híbrido recomendado):",
+    "Modos de Operação (modo híbrido mais recomendado):",
     [
-        "1. Autônomo (Curva Epidemiológica FRAX Brasil + Conversão DXA + FRAXplus)",
+        "1. Autônomo (Curva Epidemiológica FRAX Brasil + Conversão DMO + FRAXplus)",
         "2. Híbrido (Inserir resultado da calculadora FRAX + Aplicar ajustes FRAXplus)"
     ],
     horizontal=True
@@ -554,8 +554,8 @@ with col_res:
     <div class="result-card">
         <div style="font-size:12.5px; color:#555; font-weight:bold;">FRAX BRASIL PADRÃO (SEM MODIFICADORES)</div>
         <div style="display:flex; justify-content:space-between; margin-top:6px;">
-            <div><span style="font-size:13.5px;">Fratura Maior (MOF):</span><br><b style="font-size:22px; color:#000;">{mof_base:.1f}%</b></div>
-            <div><span style="font-size:13.5px;">Fratura de Quadril:</span><br><b style="font-size:22px; color:#000;">{hip_base:.1f}%</b></div>
+            <div><span style="font-size:13.5px; color:#222;">Fratura Maior (MOF):</span><br><b style="font-size:22px; color:#222;">{mof_base:.1f}%</b></div>
+            <div><span style="font-size:13.5px; color:#222;">Fratura de Quadril:</span><br><b style="font-size:22px; color:#222;">{hip_base:.1f}%</b></div>
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -580,7 +580,7 @@ with col_res:
 
         # Seletor interativo de clique único para o médico escolher qual fator aplicar
         opcoes_radio = [
-            f"⭐ Automático — Fator Dominante: {fator_dominante['nome']} (MOF {fator_dominante['mof_isolado']:.1f}% (FQ {fator_dominante['hip_isolado']:.1f}%)"
+            f"⭐ Automático — Fator Dominante: {fator_dominante['nome']} (MOF {fator_dominante['mof_isolado']:.1f}% | FQ {fator_dominante['hip_isolado']:.1f}%)"
         ] + [
             f"{c['nome']} → MOF {c['mof_isolado']:.1f}% | Quadril {c['hip_isolado']:.1f}%"
             for c in candidatos_ordenados
