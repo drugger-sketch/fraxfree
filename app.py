@@ -554,7 +554,7 @@ with col_res:
     <div class="result-card">
         <div style="font-size:12.5px; color:#555; font-weight:bold;">FRAX BRASIL PADRÃO (SEM MODIFICADORES)</div>
         <div style="display:flex; justify-content:space-between; margin-top:6px;">
-            <div><span style="font-size:13.5px;">Fratura Maior (MOF):</span><br><b style="font-size:22px; color:#555;">{mof_base:.1f}%</b></div>
+            <div><span style="font-size:13.5px;">Fratura Maior (MOF):</span><br><b style="font-size:22px; color:#333;">{mof_base:.1f}%</b></div>
             <div><span style="font-size:13.5px;">Fratura de Quadril:</span><br><b style="font-size:22px; color:#555;">{hip_base:.1f}%</b></div>
         </div>
     </div>
