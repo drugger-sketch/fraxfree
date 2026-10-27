@@ -5,7 +5,7 @@ import math
 # CONFIGURAÇÃO DA PÁGINA E ESTILO VISUAL
 # ==========================================
 st.set_page_config(
-    page_title="Calculadora FRAX & FRAXplus Brasil (Modelo Oficial)",
+    page_title="Calculadora FRAX-FREE",
     page_icon="🦴",
     layout="wide"
 )
@@ -64,7 +64,7 @@ st.markdown("""
 
 st.markdown("""
 <div class="main-header">
-    <h2>🦴 Calculadora de Risco Osteoporótico + Módulo FRAXplus (Coorte Brasil)</h2>
+    <h2>🦴 Calculadora de Risco Osteoporótico (Coorte Brasil)</h2>
     <p>Calibração epidemiológica brasileira (Zerbini et al., 2015), padronização DXA ICSBM/NHANES III e aplicação estrita de fator único validado (fraxplus.org)</p>
 </div>
 """, unsafe_allow_html=True)
@@ -292,10 +292,10 @@ def gerar_svg_grafico_abrasso(idade_pac: int, mof_base: float, mof_plus: float) 
 # INTERFACE PRINCIPAL (SELETOR DE MODO BASE)
 # ==========================================
 modo_calculo = st.radio(
-    "Modo de Operação do Motor Base:",
+    "ModoS de Operação (modo híbrido recomendado):",
     [
         "1. Autônomo (Curva Epidemiológica FRAX Brasil + Conversão DXA + FRAXplus)",
-        "2. Híbrido (Inserir resultado gratuito do site FRAX/ABRASSO + Aplicar FRAXplus)"
+        "2. Híbrido (Inserir resultado da calculadora FRAX + Aplicar ajustes FRAXplus)"
     ],
     horizontal=True
 )
@@ -375,7 +375,7 @@ with col_plus:
     st.caption("Ative os fatores presentes no caso para comparar o impacto individual de cada um.")
 
     # Módulo 1: Recência e Sítio da Fratura
-    with st.expander("1️⃣ Recência e Sítio da Fratura Prévia (< 2 anos)", expanded=frat_prev):
+    with st.expander("1️⃣ Sítio da Fratura Prévia (< 2 anos)", expanded=frat_prev):
         if frat_prev:
             frat_recente = st.checkbox("Fratura osteoporótica ocorreu nos últimos 24 meses", value=True)
             sitio_frat = st.selectbox(
@@ -388,7 +388,7 @@ with col_plus:
             sitio_frat = "Vertebral (Clínica)"
 
     # Módulo 2: Dose de Glicocorticoide
-    with st.expander("2️⃣ Dose Diária de Glicocorticoide", expanded=corticoide):
+    with st.expander("2️⃣ Dose diária de glicocorticoide", expanded=corticoide):
         if corticoide:
             dose_gc = st.radio(
                 "Dose equivalente de Prednisolona:",
@@ -400,7 +400,7 @@ with col_plus:
             dose_gc = "Média (2,5 a 7,5 mg/dia - Padrão FRAX)"
 
     # Módulo 3: Quedas no último ano
-    with st.expander("3️⃣ Número de Quedas nos Últimos 12 Meses", expanded=True):
+    with st.expander("3️⃣ Número de quedas nos últimos 12 meses", expanded=True):
         aplicar_quedas = st.checkbox("Incluir avaliação de quedas no último ano", value=True)
         if aplicar_quedas:
             quedas_op = st.select_slider(
@@ -412,7 +412,7 @@ with col_plus:
             quedas_op = None
 
     # Módulo 4: Discordância Coluna Lombar (L1-L4)
-    with st.expander("4️⃣ Discordância DMO Coluna Lombar (L1–L4)", expanded=usar_dmo):
+    with st.expander("4️⃣ Discordância DMO coluna lombar (L1–L4)", expanded=usar_dmo):
         if usar_dmo:
             usar_coluna = st.checkbox("Avaliar discordância da Coluna Lombar (Regra de Leslie)", value=True)
             if usar_coluna:
@@ -436,7 +436,7 @@ with col_plus:
         usar_tbs = st.checkbox("Avaliar ajuste por TBS (McCloskey et al., 2016)", value=False)
         tbs_val = st.slider("Valor do TBS", 0.900, 1.500, 1.180, 0.010) if usar_tbs else None
 
-    # Módulo 6: Diabetes Tipo 2 e Duração
+    # Módulo 6: Diabetes tipo 2 e duração
     with st.expander("6️⃣ Diabetes Mellitus Tipo 2 e Tempo de Doença", expanded=False):
         dm2 = st.checkbox("Paciente com Diabetes Tipo 2", value=False)
         duracao_dm2 = st.selectbox(
