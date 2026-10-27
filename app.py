@@ -326,16 +326,16 @@ with col_frax:
         hip_manual = st.number_input("Fratura de Quadril Oficial (%)", 0.1, 90.0, 3.5, step=0.1)
 
     st.markdown("**Fatores de Risco Clínicos:**")
-    frat_prev = st.toggle("5. Fratura prévia por fragilidade", value=True)
-    pais_quadril = st.toggle("6. Pais com fratura de quadril", value=False)
-    tabagismo = st.toggle("7. Tabagismo atual", value=False)
-    corticoide = st.toggle("8. Uso de Glicocorticoides", value=True)
-    ar = st.toggle("9. Artrite Reumatoide", value=False)
-    osteop_sec = st.toggle("10. Osteoporose Secundária", value=False)
-    alcool = st.toggle("11. Álcool (3 ou mais doses/dia)", value=False)
+    frat_prev = st.toggle("Fratura prévia por fragilidade", value=True)
+    pais_quadril = st.toggle("Pais com fratura de quadril", value=False)
+    tabagismo = st.toggle("Tabagismo atual", value=False)
+    corticoide = st.toggle("Uso de Glicocorticoides", value=True)
+    ar = st.toggle("Artrite Reumatoide", value=False)
+    osteop_sec = st.toggle("1Osteoporose Secundária", value=False)
+    alcool = st.toggle("Álcool (3 ou mais doses/dia)", value=False)
 
     st.markdown("---")
-    st.markdown("**12. DMO do Colo do Fêmur (Aparelho DXA):**")
+    st.markdown("**DMO do Colo do Fêmur (Aparelho DXA):**")
     metodo_dmo = st.selectbox(
         "Equipamento DXA:",
         [
@@ -554,8 +554,8 @@ with col_res:
     <div class="result-card">
         <div style="font-size:12.5px; color:#555; font-weight:bold;">FRAX BRASIL PADRÃO (SEM MODIFICADORES)</div>
         <div style="display:flex; justify-content:space-between; margin-top:6px;">
-            <div><span style="font-size:13.5px;">Fratura Maior (MOF):</span><br><b style="font-size:22px; color:#222;">{mof_base:.1f}%</b></div>
-            <div><span style="font-size:13.5px;">Fratura de Quadril:</span><br><b style="font-size:22px; color:#222;">{hip_base:.1f}%</b></div>
+            <div><span style="font-size:13.5px;">Fratura Maior (MOF):</span><br><b style="font-size:22px; color:#555;">{mof_base:.1f}%</b></div>
+            <div><span style="font-size:13.5px;">Fratura de Quadril:</span><br><b style="font-size:22px; color:#555;">{hip_base:.1f}%</b></div>
         </div>
     </div>
     """, unsafe_allow_html=True)
