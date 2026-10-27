@@ -663,7 +663,7 @@ with col_res:
 
     st.info(f"**Conduta Sugerida:** {conduta}")
 
-    with st.expander("📋 Resumo Pronto para Copiar para o Prontuário", expanded=False):
+    with st.expander("📋 Resumo pronto para copiar para o prontuário", expanded=False):
         dmo_txt = f"T-score Colo Femoral (NHANES III) = {t_colo:+.2f} DP" if usar_dmo else "Sem DMO informada"
         col_txt = f" | T-score L1-L4 = {t_coluna:+.2f} DP" if (usar_dmo and t_coluna is not None) else ""
         outros_txt = ", ".join([f"{c['nome']} (MOF {c['mof_isolado']:.1f}%)" for c in candidatos_plus]) if candidatos_plus else "Nenhum"
