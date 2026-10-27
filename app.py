@@ -567,7 +567,7 @@ with col_res:
         fator_dominante = candidatos_ordenados[0]
 
         st.markdown("##### 🔬 Impacto individual de cada fator ativo isoladamente")
-        linhas_md = "| Fator Modificador (Isolado) | Mult. (MOF / FQ) | MOF Ajustado | Quadril Ajustado |\n"
+        linhas_md = "| Fator Modificador (Isolado) | Mult. (MOF / FQ) | MOF Ajustado | FQ Ajustado |\n"
         linhas_md += "| :--- | :---: | :---: | :---: |\n"
         for idx, c in enumerate(candidatos_ordenados):
             destaque = "⭐ " if idx == 0 else ""
@@ -619,12 +619,12 @@ with col_res:
         </div>
         <div style="display:flex; justify-content:space-between;">
             <div>
-                <span style="font-size:13.5px;">Fratura Maior (MOF):</span><br>
+                <span style="font-size:13.5px; color:#B22222;">Fratura Maior (MOF):</span><br>
                 <b style="font-size:27px; color:#B22222;">{mof_plus:.1f}%</b>
                 <span style="font-size:13px; color:#d9534f; font-weight:bold;">({delta_mof:+.1f}%)</span>
             </div>
             <div>
-                <span style="font-size:13.5px;">Fratura de Quadril:</span><br>
+                <span style="font-size:13.5px; color:#B22222;">Fratura de Quadril (FQ):</span><br>
                 <b style="font-size:27px; color:#B22222;">{hip_plus:.1f}%</b>
                 <span style="font-size:13px; color:#d9534f; font-weight:bold;">({delta_hip:+.1f}%)</span>
             </div>
