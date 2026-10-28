@@ -649,18 +649,55 @@ with col_plus:
         dm2 = st.checkbox("Paciente com Diabetes Tipo 2", value=False)
         metodo_dm, dm_mof_oficial, dm_hip_oficial = None, 0.0, 0.0
         if dm2:
-            opcoes_dm = ["Marcar Artrite Reumatoide = Sim (recomendado)", "Somar 10 anos à idade"]
+            # Método recomendado já vem selecionado: com DMO, T-score −0,5 (corrige melhor o risco de
+            # quadril em Leslie 2018); sem DMO, AR = Sim (método recomendado pela ABRASSO).
             if usar_dmo:
-                opcoes_dm.append("Reduzir T-score do colo em 0,5 DP")
-            metodo_dm = st.radio("Método de ajuste (ABRASSO 2.0 / Leslie et al., 2018):", opcoes_dm)
-            st.caption("O FRAXplus usa a duração do DM2 quando há DMO, mas os coeficientes não são públicos; "
-                       "os 3 métodos acima são os validados por Leslie 2018 e adotados pela ABRASSO.")
-            if metodo_dm.startswith("Marcar") and ar:
-                st.caption("Artrite reumatoide já está marcada — este método não altera o resultado.")
+                opcoes_dm = ["Reduzir T-score do colo em 0,5 DP (recomendado com DMO)",
+                             "Marcar Artrite Reumatoide = Sim", "Somar 10 anos à idade"]
             else:
-                st.info("Recalcule no FRAX oficial aplicando o método escolhido e informe o resultado:")
-                dm_mof_oficial = st.number_input("MOF recalculado (%)", 0.0, 95.0, 0.0, 0.1, key="dm_mof")
-                dm_hip_oficial = st.number_input("Quadril recalculado (%)", 0.0, 90.0, 0.0, 0.1, key="dm_hip")
+                opcoes_dm = ["Marcar Artrite Reumatoide = Sim (recomendado sem DMO)", "Somar 10 anos à idade"]
+            metodo_dm = st.radio("Método de ajuste (ABRASSO 2.0 / Leslie et al., 2018):", opcoes_dm)
+
+            # Por que o método recomendado de cada cenário (Leslie et al., JBMR 2018)
+            if usar_dmo:
+                st.caption("**Por que T-score −0,5 com DMO:** no estudo de Leslie 2018, a subestimação do risco de "
+                           "quadril persistiu após os ajustes por AR e por TBS, mas não com T-score −0,5 ou idade +10. "
+                           "O T-score −0,5 é o mais natural de aplicar quando há densitometria.")
+            else:
+                st.caption("**Por que AR = Sim sem DMO:** é o método indicado pela ABRASSO e, junto com a idade +10, "
+                           "o único que não depende da densitometria.")
+
+            # Avisos de cada método
+            metodo_sem_efeito = False
+            if metodo_dm.startswith("Marcar") and ar:
+                metodo_sem_efeito = True
+                st.warning("A artrite reumatoide já está marcada — o método \"AR = Sim\" não muda nada. "
+                           "Escolha outro método.")
+            if metodo_dm.startswith("Somar"):
+                st.caption("⚠️ Idade +10 tende a dar o maior aumento no risco de quadril entre os métodos.")
+                if idade > 80:
+                    st.warning(f"Idade +10 = {idade + 10} anos, mas o FRAX limita a idade em 90 — o efeito será "
+                               "menor que o esperado.")
+
+            # Instrução precisa do que mudar no site oficial
+            if not metodo_sem_efeito:
+                if metodo_dm.startswith("Reduzir"):
+                    t_novo = t_colo - 0.5
+                    mudanca = (f"**DMO do colo**: troque para entrada por **T-score** e digite **{t_novo:+.1f}** "
+                               f"(T-score atual {t_colo:+.1f} − 0,5)")
+                    if metodo_dmo != "T-Score (NHANES III direto)":
+                        mudanca += ". Se tiver o T-score do laudo, use-o − 0,5 (o T-score deste app é estimado a partir da DMO em g/cm²)"
+                elif metodo_dm.startswith("Marcar"):
+                    mudanca = "**Artrite reumatoide** → **Sim**"
+                else:
+                    mudanca = f"**Idade** → **{min(90, idade + 10)} anos**"
+                st.info(f"👉 Volte à calculadora FRAX oficial, mantenha todos os outros dados iguais, altere apenas "
+                        f"{mudanca}, recalcule e digite os novos resultados abaixo.")
+                st.link_button("🌐 Abrir FRAX oficial", URL_FRAX_OFICIAL)
+                dm_mof_oficial = st.number_input("MOF recalculado no FRAX oficial (%)", 0.0, 95.0, 0.0, 0.1, key="dm_mof")
+                dm_hip_oficial = st.number_input("Quadril recalculado no FRAX oficial (%)", 0.0, 90.0, 0.0, 0.1, key="dm_hip")
+                if dm_mof_oficial == 0 or dm_hip_oficial == 0:
+                    st.caption("O ajuste por diabetes só entra na comparação depois que os dois valores forem digitados.")
 
     # Módulo 7: Comprimento do Eixo do Quadril (HAL)
     with st.expander("7️⃣ Comprimento do Eixo do Quadril (HAL - mm)", expanded=False):
@@ -762,6 +799,7 @@ if dm2 and metodo_dm is not None:
     nome_dm = "Diabetes Tipo 2 (" + ("AR = Sim" if metodo_dm.startswith("Marcar")
                                      else "idade +10a" if metodo_dm.startswith("Somar")
                                      else "T-score −0,5") + ")"
+    # Só entra na comparação com o valor recalculado no FRAX oficial (sem estimativa automática)
     if dm_mof_oficial > 0 and dm_hip_oficial > 0:
         registrar_fator(nome_dm, "Leslie et al., 2018 / ABRASSO 2024",
                         round(max(dm_mof_oficial, dm_hip_oficial), 1), round(dm_hip_oficial, 1))
@@ -967,7 +1005,7 @@ with col_res:
 - Glicocorticoide: alta dose MOF ×1,15 / quadril ×1,20; baixa dose ×0,80 / ×0,65 (Kanis et al., 2011).
 - Quedas, número de fraturas e discordância coluna–colo: tabela de ajustes do FRAX Brasil 2.0 (ABRASSO, 2024).
 - HAL: +4,7%/mm acima e −3,8%/mm abaixo da média por sexo, só no quadril (Leslie et al., *J Clin Densitom* 2016).
-- DM2: recálculo do FRAX com AR = sim, idade +10 anos ou T-score −0,5 (Leslie et al., *JBMR* 2018).
+- DM2: métodos validados por Leslie et al., *JBMR* 2018 (AR = sim, idade +10 anos ou T-score −0,5). O resultado vem do recálculo no site oficial com o parâmetro escolhido (T-score −0,5 recomendado com DMO; AR = Sim sem DMO).
 
 **Aproximações (⚠️):**
 - TBS: fórmula oficial não publicada; usa HR por DP de McCloskey et al., 2015.
