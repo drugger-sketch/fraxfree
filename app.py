@@ -330,18 +330,30 @@ def aplicar_multiplicadores(mof_b: float, hip_b: float, rr_mof: float, rr_hip: f
     return round(mof_adj, 1), round(hip_adj, 1)
 
 
-def gerar_svg_grafico_abrasso(idade_pac: int, mof_base: float, mof_plus: float,
-                              com_dmo: bool, fator_manual: float = 1.0) -> str:
-    """Gráfico SVG das faixas ABRASSO / FRAX Brasil 2.0 (40 a 90 anos)."""
+def gerar_svg_grafico_abrasso(idade_pac: int, valor_base: float, valor_plus: float,
+                              com_dmo: bool, fator_manual: float = 1.0, tipo: str = "mof") -> str:
+    """
+    Gráfico SVG das faixas ABRASSO / FRAX Brasil 2.0 (40 a 90 anos).
+    tipo="mof": fraturas maiores (com ou sem DMO); tipo="quadril": fratura de quadril (só com DMO,
+    como no FRAX Brasil 2.0). O limiar manual da barra lateral reescala as duas curvas.
+    """
     idades = list(range(40, 91, 2))
     lims = {i: limiares_abrasso_brasil(i) for i in idades}
-    li = {i: lims[i]["li"] * fator_manual for i in idades}
-    lsa = {i: lims[i]["lsa"] * fator_manual for i in idades}
-    vha = {i: lims[i]["muito_alto"] * fator_manual for i in idades}
-    lia = {i: min(lims[i]["lia"], li[i]) for i in idades}
+    if tipo == "quadril":
+        com_dmo = True  # a ABRASSO só exibe o gráfico de quadril quando há DMO
+        li = {i: lims[i]["li_quadril"] * fator_manual for i in idades}
+        vha = {i: 1.6 * li[i] for i in idades}
+        lsa, lia = li, li
+    else:
+        li = {i: lims[i]["li"] * fator_manual for i in idades}
+        lsa = {i: lims[i]["lsa"] * fator_manual for i in idades}
+        vha = {i: lims[i]["muito_alto"] * fator_manual for i in idades}
+        lia = {i: min(lims[i]["lia"], li[i]) for i in idades}
 
-    maior = max(max(vha.values()), mof_base, mof_plus) * 1.15
-    y_max = max(15.0, math.ceil(maior / 5.0) * 5.0)
+    maior = max(max(vha.values()), valor_base, valor_plus) * 1.15
+    y_min_escala = 5.0 if tipo == "quadril" else 15.0
+    passo_arred = 1.0 if maior <= 10 else 5.0
+    y_max = max(y_min_escala, math.ceil(maior / passo_arred) * passo_arred)
 
     def x_coord(id_val): return 50 + ((id_val - 40) / 50.0) * 440
     def y_coord(v): return 240 - (min(y_max, max(0.0, v)) / y_max) * 220
@@ -382,7 +394,7 @@ def gerar_svg_grafico_abrasso(idade_pac: int, mof_base: float, mof_plus: float,
         for v, cor, txt in rotulos
     )
 
-    passo = 5 if y_max <= 30 else 10
+    passo = 1 if y_max <= 6 else (2 if y_max <= 12 else (5 if y_max <= 30 else 10))
     grades_y = ""
     val = 0
     while val <= y_max:
@@ -397,8 +409,9 @@ def gerar_svg_grafico_abrasso(idade_pac: int, mof_base: float, mof_plus: float,
         grades_x += f'<text x="{gx:.1f}" y="258" font-size="11" fill="#444" text-anchor="middle">{id_v}</text>'
 
     xp = x_coord(idade_pac)
-    yb = y_coord(mof_base)
-    yp = y_coord(mof_plus)
+    yb = y_coord(valor_base)
+    yp = y_coord(valor_plus)
+    sigla = "Quadril" if tipo == "quadril" else "MOF"
 
     return f"""
     <svg viewBox="0 0 520 280" style="width:100%; height:auto; background:#fafafa; border:1px solid #ddd; border-radius:8px;">
@@ -413,7 +426,7 @@ def gerar_svg_grafico_abrasso(idade_pac: int, mof_base: float, mof_plus: float,
         <circle cx="{xp:.1f}" cy="{yb:.1f}" r="5.5" fill="#ffffff" stroke="#333333" stroke-width="2.2"/>
         <circle cx="{xp:.1f}" cy="{yp:.1f}" r="7" fill="#B22222" stroke="#ffffff" stroke-width="2"/>
         {textos_rotulos}
-        <text x="270" y="275" font-size="11.5" font-weight="bold" fill="#333" text-anchor="middle">Idade (anos) — ○ FRAX Base ({mof_base:.1f}%) | ● Ajustado ({mof_plus:.1f}%) — linha laranja: limiar de intervenção</text>
+        <text x="270" y="275" font-size="11.5" font-weight="bold" fill="#333" text-anchor="middle">Idade (anos) — ○ {sigla} Base ({valor_base:.1f}%) | ● {sigla} Ajustado ({valor_plus:.1f}%) — linha laranja: limiar de intervenção</text>
     </svg>
     """
 
@@ -452,7 +465,20 @@ col_frax, col_plus, col_res = st.columns([1.1, 1.25, 1.35], gap="large")
 # COLUNA 1: VARIÁVEIS DO FRAX PADRÃO + DMO COLO FEMORAL
 # ------------------------------------------
 with col_frax:
-    st.subheader("📋 1. Fatores FRAX Padrão")
+    if modo_hibrido:
+        # No modo híbrido o médico começa pelo resultado do FRAX oficial e depois completa os dados
+        st.subheader("📋 1. Resultado FRAX oficial")
+        st.info("Primeiro, insira o resultado do FRAX oficial para o Brasil (frax.shef.ac.uk / fraxplus.org ou "
+                "calculadora da ABRASSO):")
+        mof_manual = st.number_input("Fratura Maior - MOF Oficial (%)", 0.1, 95.0, 14.0, step=0.1)
+        hip_manual = st.number_input("Fratura de Quadril Oficial (%)", 0.1, 90.0, 3.5, step=0.1)
+        if hip_manual > mof_manual:
+            st.warning("O risco de quadril não pode ser maior que o de fratura maior (MOF inclui o quadril). Confira os valores.")
+        st.markdown("---")
+        st.markdown("**Agora complete os dados do paciente** (os mesmos usados no FRAX oficial — servem para os "
+                    "ajustes, os limiares e o gráfico):")
+    else:
+        st.subheader("📋 1. Fatores FRAX Padrão")
     c1, c2 = st.columns(2)
     with c1:
         idade = st.number_input("Idade (40–90 anos)", min_value=40, max_value=90, value=68)
@@ -463,14 +489,6 @@ with col_frax:
 
     imc = peso / ((altura / 100.0) ** 2)
     st.caption(f"IMC Calculado: **{imc:.1f} kg/m²**")
-
-    if modo_hibrido:
-        st.info("Insira abaixo o resultado do FRAX oficial para o Brasil (frax.shef.ac.uk / fraxplus.org ou calculadora "
-                "da ABRASSO), calculado com os MESMOS fatores marcados abaixo:")
-        mof_manual = st.number_input("Fratura Maior - MOF Oficial (%)", 0.1, 95.0, 14.0, step=0.1)
-        hip_manual = st.number_input("Fratura de Quadril Oficial (%)", 0.1, 90.0, 3.5, step=0.1)
-        if hip_manual > mof_manual:
-            st.warning("O risco de quadril não pode ser maior que o de fratura maior (MOF inclui o quadril). Confira os valores.")
 
     st.markdown("**Fatores de Risco Clínicos:**")
     frat_prev = st.toggle("Fratura prévia por fragilidade", value=True)
@@ -860,8 +878,20 @@ with col_res:
     vha_pac = round(lim["muito_alto"] * fator_manual, 1)
     lia_pac = min(lim["lia"], li_pac)
     li_hip_pac = round(lim["li_quadril"] * fator_manual, 1)
+    vha_hip_pac = round(1.6 * lim["li_quadril"] * fator_manual, 1)
 
-    st.markdown(gerar_svg_grafico_abrasso(idade, mof_base, mof_plus, usar_dmo, fator_manual), unsafe_allow_html=True)
+    # Gráficos no formato do FRAX Brasil 2.0: fraturas maiores e fratura de quadril.
+    # Como na ABRASSO, o gráfico de quadril só é exibido quando há DMO.
+    st.markdown("##### 📈 Probabilidade de Fraturas Maiores (MOF)")
+    st.markdown(gerar_svg_grafico_abrasso(idade, mof_base, mof_plus, usar_dmo, fator_manual, "mof"),
+                unsafe_allow_html=True)
+    st.markdown("##### 📈 Probabilidade de Fratura de Quadril")
+    if usar_dmo:
+        st.markdown(gerar_svg_grafico_abrasso(idade, hip_base, hip_plus, True, fator_manual, "quadril"),
+                    unsafe_allow_html=True)
+    else:
+        st.caption("Sem DMO, o FRAX Brasil 2.0 (ABRASSO) exibe apenas o gráfico de fraturas maiores. "
+                   "Informe a DMO do colo femoral para ver o gráfico de quadril.")
 
     # Critério fixo NOF/BHOF (EUA): exibido apenas como informação, pois é derivado de
     # custo-efetividade norte-americano e não faz parte da estratificação da ABRASSO.
@@ -869,8 +899,14 @@ with col_res:
     fratura_recente = bool(frat_prev and frat_recente)
     osteoporose_dxa = bool(usar_dmo and (t_colo <= -2.5 or (t_coluna is not None and t_coluna <= -2.5)))
 
-    if mof_plus >= vha_pac or fratura_recente:
-        motivo = "fratura recente (< 2 anos)" if fratura_recente and mof_plus < vha_pac else f"MOF ≥ {vha_pac}%"
+    quadril_muito_alto = bool(usar_dmo and hip_plus >= vha_hip_pac)
+    if mof_plus >= vha_pac or quadril_muito_alto or fratura_recente:
+        if mof_plus >= vha_pac:
+            motivo = f"MOF ≥ {vha_pac}%"
+        elif quadril_muito_alto:
+            motivo = f"Quadril ≥ {vha_hip_pac}%"
+        else:
+            motivo = "fratura recente (< 2 anos)"
         categoria = f"MUITO ALTO RISCO ({motivo})"
         cor_badge = "#8B0000"
         conduta = "Considerar terapia sequencial iniciando com agente osteoformador / anabólico (Teriparatida ou Romosozumabe) ou antirreabsortivo parenteral potente (Ácido Zoledrônico / Denosumabe), conforme diretriz ABRASSO/PCDT."
@@ -896,7 +932,7 @@ with col_res:
         conduta = "Abaixo do limiar de intervenção farmacológica aos critérios atuais. Manter medidas não farmacológicas e monitorar."
 
     texto_limiares = (f"Intervenção ≥ <b>{li_pac}%</b> | Muito Alto Risco ≥ <b>{vha_pac}%</b>"
-                      + (f" | Quadril ≥ <b>{li_hip_pac}%</b>" if usar_dmo else
+                      + (f" | Quadril: intervenção ≥ <b>{li_hip_pac}%</b>, muito alto ≥ <b>{vha_hip_pac}%</b>" if usar_dmo else
                          f" | Faixa DXA: <b>{lia_pac}%</b> a <b>{lsa_pac}%</b>"))
     origem_limiar = "informado manualmente" if fator_manual != 1.0 else "estimado, modelo híbrido fixo ≥ 70 a"
     st.markdown(f"""
@@ -939,7 +975,7 @@ with col_res:
 **Aproximações (⚠️):**
 - TBS: fórmula oficial não publicada; usa HR por DP de McCloskey et al., 2015.
 - Modo autônomo: imitação do FRAX calibrada às Tabelas 1–2 de Albergaria et al., *Arch Osteoporos* 2023.
-- Limiares: gerados pela definição NOGG/ABRASSO sobre o motor calibrado (aos 65 a: 5,9%, igual ao publicado).
+- Limiares: gerados pela definição NOGG/ABRASSO sobre o motor calibrado (aos 65 a: MOF 5,9% e quadril 1,4%, iguais aos publicados). Muito alto risco = 1,6 × limiar, para MOF e quadril.
 
 Todos os ajustes multiplicam a **probabilidade** em 10 anos e apenas **um** é aplicado por vez (FRAXplus/ABRASSO).
 """)
