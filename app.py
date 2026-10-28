@@ -1,6 +1,5 @@
 import streamlit as st
 import math
-from functools import lru_cache
 
 # ==========================================
 # CONFIGURAÇÃO DA PÁGINA E ESTILO VISUAL
@@ -117,21 +116,10 @@ def converter_coluna_para_tscore(equipamento: str, valor_dmo: float) -> float:
 
 
 # ==========================================
-# 2. MODELO INTERNO (USADO SÓ PARA AS CURVAS DE LIMIAR ABRASSO) — CALIBRADO AO FRAX BRASIL 2023
+# 2. LIMIARES ABRASSO / FRAX BRASIL 2.0 (VALORES OFICIAIS)
 # ==========================================
-def interpolar_curva(idade: float, tabela: dict) -> float:
-    """Interpolação linear em tabela com chaves a cada 5 anos (40–90)."""
-    idade_c = max(40, min(90, idade))
-    i_inf = int(idade_c // 5) * 5
-    i_sup = min(90, i_inf + 5)
-    if i_inf == i_sup:
-        return tabela[i_inf]
-    fator = (idade_c - i_inf) / 5.0
-    return tabela[i_inf] + fator * (tabela[i_sup] - tabela[i_inf])
-
-
 def interpolar_decada(idade: float, tabela: dict) -> float:
-    """Interpolação linear em tabela com chaves por década; fora do intervalo usa o extremo."""
+    """Interpolação linear entre as idades da tabela; fora do intervalo usa o valor do extremo."""
     chaves = sorted(tabela)
     a = max(chaves[0], min(chaves[-1], idade))
     for i in range(len(chaves) - 1):
@@ -141,133 +129,35 @@ def interpolar_decada(idade: float, tabela: dict) -> float:
     return tabela[chaves[-1]]
 
 
-# --- Calibração (multiplicadores de hazard basal) ---
-# O FRAX Brasil foi refeito em 2023 com dados do estudo BRAVOS (Albergaria et al., Arch
-# Osteoporos 2023;18:144): as probabilidades caíram 20–56% em relação ao modelo original.
-# O motor antigo (curvas "Zerbini 2015") dava ~2x o valor oficial atual.
-# Os fatores abaixo foram ajustados para que o motor reproduza:
-#   • com DMO: as medianas de MOF e quadril da Tabela 1 de Albergaria 2023 (512 combinações
-#     de fatores de risco × T-score 0 a −3,5; IMC 25; idades 50/60/70/80; por sexo);
-#   • sem DMO: o valor publicado na Tabela 2 (65 anos, fratura prévia, IMC 25):
-#     mulheres MOF 5,9% / quadril 1,4%; homens 3,4% / 0,8%.
-# Mesmo assim, é uma APROXIMAÇÃO do algoritmo FRAX (que é proprietário).
-K_MOF_DMO = {
-    "Feminino":  {50: 0.4467, 60: 0.5733, 70: 0.4967, 80: 0.4287},
-    "Masculino": {50: 0.4681, 60: 0.5531, 70: 0.4961, 80: 0.4422},
-}
-K_HIP_DMO = {
-    "Feminino":  {50: 0.1400, 60: 0.1579, 70: 0.2653, 80: 0.3672},
-    "Masculino": {50: 0.1255, 60: 0.1230, 70: 0.1581, 80: 0.2001},
-}
-C_MOF_SEM_DMO = {"Feminino": 0.9502, "Masculino": 0.9364}
-K_HIP_SEM_DMO = {"Feminino": 0.4254, "Masculino": 0.3210}
-
-
-@lru_cache(maxsize=4096)
-def calcular_motor_base_brasil(idade, sexo, imc, usar_dmo, t_colo,
-                               frat_prev, pais_quadril, tabagismo, corticoide,
-                               ar, osteop_sec, alcool) -> tuple:
-    """Motor base (aproximação do FRAX Brasil 2023). Retorna (MOF %, Quadril %)."""
-    if sexo == "Feminino":
-        tab_mof = {40: 2.0, 45: 2.4, 50: 3.0, 55: 3.9, 60: 5.1, 65: 6.7, 70: 8.9, 75: 11.8, 80: 14.3, 85: 15.5, 90: 14.8}
-        tab_hip = {40: 0.15, 45: 0.25, 50: 0.42, 55: 0.70, 60: 1.15, 65: 1.85, 70: 3.10, 75: 5.10, 80: 7.30, 85: 8.70, 90: 8.30}
-        t_esperado_idade = -0.35 - 0.038 * (idade - 40)
-    else:
-        tab_mof = {40: 1.7, 45: 1.9, 50: 2.2, 55: 2.6, 60: 3.2, 65: 4.0, 70: 5.1, 75: 6.5, 80: 7.7, 85: 8.2, 90: 7.6}
-        tab_hip = {40: 0.12, 45: 0.20, 50: 0.33, 55: 0.52, 60: 0.85, 65: 1.40, 70: 2.35, 75: 3.80, 80: 5.30, 85: 6.20, 90: 5.80}
-        t_esperado_idade = +0.15 - 0.027 * (idade - 40)
-
-    base_mof = interpolar_curva(idade, tab_mof)
-    base_hip = interpolar_curva(idade, tab_hip)
-
-    # Calibração FRAX Brasil 2023
-    k_mof = interpolar_decada(idade, K_MOF_DMO[sexo])
-    if usar_dmo and t_colo is not None:
-        k_hip = interpolar_decada(idade, K_HIP_DMO[sexo])
-    else:
-        k_mof *= C_MOF_SEM_DMO[sexo]
-        k_hip = K_HIP_SEM_DMO[sexo]
-
-    rr_mof_dmo, rr_hip_dmo = 1.0, 1.0
-    if usar_dmo and t_colo is not None:
-        delta_z = t_esperado_idade - t_colo
-        gradiente_hip = max(1.75, min(4.00, 3.68 - 0.045 * (idade - 50)))
-        gradiente_mof = 1.55 - 0.005 * (idade - 50)
-        rr_hip_dmo = math.pow(gradiente_hip, delta_z)
-        rr_mof_dmo = math.pow(gradiente_mof, delta_z)
-    else:
-        # Sem DMO, o IMC entra no modelo (com DMO o FRAX ignora o IMC)
-        if imc < 25.0:
-            rr_mof_dmo = math.pow(1.03, (25.0 - imc))
-            rr_hip_dmo = math.pow(1.10, (25.0 - imc))
-        elif imc > 25.0:
-            rr_mof_dmo = math.pow(0.985, min(15.0, imc - 25.0))
-            rr_hip_dmo = math.pow(0.960, min(15.0, imc - 25.0))
-
-    aten = 0.86 if usar_dmo else 1.0
-    rr_mof_clin, rr_hip_clin = 1.0, 1.0
-
-    if frat_prev:
-        rr_fp_mof = max(1.45, 1.95 - 0.009 * (idade - 40))
-        rr_fp_hip = max(1.40, 2.15 - 0.015 * (idade - 40))
-        rr_mof_clin *= (rr_fp_mof * (0.92 if usar_dmo else 1.0))
-        rr_hip_clin *= (rr_fp_hip * (0.90 if usar_dmo else 1.0))
-    if pais_quadril:
-        rr_mof_clin *= 1.48
-        rr_hip_clin *= 1.95
-    if tabagismo:
-        rr_mof_clin *= (1.22 * aten)
-        rr_hip_clin *= (1.60 * aten)
-    if corticoide:
-        rr_mof_clin *= (1.65 * aten)
-        rr_hip_clin *= (1.95 * aten)
-    if ar:
-        rr_mof_clin *= (1.42 * aten)
-        rr_hip_clin *= (1.70 * aten)
-    if (not usar_dmo) and osteop_sec:  # com DMO o FRAX ignora "osteoporose secundária"
-        rr_mof_clin *= 1.42
-        rr_hip_clin *= 1.70
-    if alcool:
-        rr_mof_clin *= (1.35 * aten)
-        rr_hip_clin *= (1.62 * aten)
-
-    h_base_mof = -math.log(1.0 - (base_mof / 100.0)) * k_mof
-    h_base_hip = -math.log(1.0 - (base_hip / 100.0)) * k_hip
-
-    prob_mof = (1.0 - math.exp(-h_base_mof * rr_mof_dmo * rr_mof_clin)) * 100.0
-    prob_hip = (1.0 - math.exp(-h_base_hip * rr_hip_dmo * rr_hip_clin)) * 100.0
-    prob_mof = max(prob_mof, prob_hip)
-
-    return round(min(prob_mof, 95.0), 1), round(min(prob_hip, 90.0), 1)
-
-
-# ==========================================
-# 2b. LIMIARES ABRASSO / FRAX BRASIL 2.0 (MODELO HÍBRIDO NOGG)
-# ==========================================
-# Metodologia NOGG adotada pela ABRASSO:
-#   • Limiar de intervenção (LI) = probabilidade de uma MULHER com fratura prévia, IMC 25,
-#     sem outros fatores e sem DMO (aplicado também a homens).
-#   • FRAX Brasil 2.0 (ABRASSO, set/2024): LI varia com a idade até 70 anos e fica FIXO
-#     de 70 a 90 anos.
-#   • Limiar inferior de avaliação (LIA) = mulher sem fatores de risco, IMC 25.
+# Valores obtidos na calculadora FRAX oficial (América Latina → Brasil), mulher, IMC 25
+# (64 kg / 160 cm), sem DMO e sem outros fatores de risco.
+# Metodologia NOGG adotada pela ABRASSO (FRAX Brasil 2.0, set/2024):
+#   • Limiar de intervenção (LI) = mulher COM fratura prévia; varia com a idade até 70 anos e
+#     fica FIXO de 70 a 90 anos (modelo híbrido). Aplicado também a homens.
+#   • Limiar inferior de avaliação (LIA) = mulher SEM fatores de risco.
 #   • Limiar superior de avaliação (LSA) = 1,2 × LI.  • Muito alto risco = 1,6 × LI.
-# Os valores são gerados pelo motor recalibrado (aos 65 anos o LI reproduz o valor
-# publicado de 5,9% para o FRAX Brasil 2023). Confira com o gráfico oficial da ABRASSO e,
-# se diferir, use o campo "limiar manual" na barra lateral.
-@lru_cache(maxsize=256)
-def limiares_abrasso_brasil(idade: int) -> dict:
-    idade_li = min(idade, 70)  # modelo híbrido: fixo a partir dos 70 anos
-    it_mof, it_hip = calcular_motor_base_brasil(idade_li, "Feminino", 25.0, False, None,
-                                                True, False, False, False, False, False, False)
-    lia, _ = calcular_motor_base_brasil(idade, "Feminino", 25.0, False, None,
-                                        False, False, False, False, False, False, False)
-    lia = min(lia, it_mof)
+FRAX_OFICIAL_COM_FRATURA = {  # idade: (MOF %, Quadril %)
+    40: (0.9, 0.1), 45: (1.3, 0.2), 50: (2.0, 0.3), 55: (2.9, 0.5),
+    60: (4.3, 0.9), 65: (5.9, 1.4), 70: (7.3, 2.3),
+}
+FRAX_OFICIAL_SEM_FATORES = {  # idade: (MOF %, Quadril %)
+    40: (0.4, 0.0), 45: (0.6, 0.0), 50: (0.9, 0.1), 55: (1.4, 0.2), 60: (2.1, 0.3),
+    65: (2.9, 0.6), 70: (3.8, 1.1), 75: (4.6, 2.0), 80: (5.5, 2.8), 85: (6.6, 3.2), 90: (7.4, 3.2),
+}
+
+
+def limiares_abrasso_brasil(idade: float) -> dict:
+    # interpolar_decada aceita qualquer espaçamento e mantém o último valor após os 70 anos,
+    # o que reproduz o limiar fixo de 70 a 90 anos do modelo híbrido.
+    li_mof = interpolar_decada(idade, {a: v[0] for a, v in FRAX_OFICIAL_COM_FRATURA.items()})
+    li_hip = interpolar_decada(idade, {a: v[1] for a, v in FRAX_OFICIAL_COM_FRATURA.items()})
+    lia = min(interpolar_decada(idade, {a: v[0] for a, v in FRAX_OFICIAL_SEM_FATORES.items()}), li_mof)
     return {
         "lia": round(lia, 1),
-        "li": round(it_mof, 1),
-        "lsa": round(1.2 * it_mof, 1),
-        "muito_alto": round(1.6 * it_mof, 1),
-        "li_quadril": round(it_hip, 1),
+        "li": round(li_mof, 1),
+        "lsa": round(1.2 * li_mof, 1),
+        "muito_alto": round(1.6 * li_mof, 1),
+        "li_quadril": round(li_hip, 1),
     }
 
 
@@ -331,23 +221,23 @@ def aplicar_multiplicadores(mof_b: float, hip_b: float, rr_mof: float, rr_hip: f
 
 
 def gerar_svg_grafico_abrasso(idade_pac: int, valor_base: float, valor_plus: float,
-                              com_dmo: bool, fator_manual: float = 1.0, tipo: str = "mof") -> str:
+                              com_dmo: bool, tipo: str = "mof") -> str:
     """
     Gráfico SVG das faixas ABRASSO / FRAX Brasil 2.0 (40 a 90 anos).
     tipo="mof": fraturas maiores (com ou sem DMO); tipo="quadril": fratura de quadril (só com DMO,
-    como no FRAX Brasil 2.0). O limiar manual da barra lateral reescala as duas curvas.
+    como no FRAX Brasil 2.0).
     """
     idades = list(range(40, 91, 2))
     lims = {i: limiares_abrasso_brasil(i) for i in idades}
     if tipo == "quadril":
         com_dmo = True  # a ABRASSO só exibe o gráfico de quadril quando há DMO
-        li = {i: lims[i]["li_quadril"] * fator_manual for i in idades}
+        li = {i: lims[i]["li_quadril"] for i in idades}
         vha = {i: 1.6 * li[i] for i in idades}
         lsa, lia = li, li
     else:
-        li = {i: lims[i]["li"] * fator_manual for i in idades}
-        lsa = {i: lims[i]["lsa"] * fator_manual for i in idades}
-        vha = {i: lims[i]["muito_alto"] * fator_manual for i in idades}
+        li = {i: lims[i]["li"] for i in idades}
+        lsa = {i: lims[i]["lsa"] for i in idades}
+        vha = {i: lims[i]["muito_alto"] for i in idades}
         lia = {i: min(lims[i]["lia"], li[i]) for i in idades}
 
     maior = max(max(vha.values()), valor_base, valor_plus) * 1.15
@@ -435,16 +325,9 @@ def gerar_svg_grafico_abrasso(idade_pac: int, valor_base: float, valor_plus: flo
 # INTERFACE PRINCIPAL
 # ==========================================
 # Modo único: o FRAX base vem SEMPRE da calculadora oficial (digitado pelo usuário).
-# O motor interno acima é usado apenas para desenhar as curvas de limiar ABRASSO.
+# Os limiares ABRASSO vêm da tabela oficial da seção 2.
 URL_FRAX_OFICIAL = "https://fraxplus.org/calculation-tool"
 URL_FRAX_ABRASSO = "https://abrasso.org.br/frax-brasil/"
-
-# --- Calibração opcional do limiar (barra lateral) ---
-with st.sidebar.expander("⚙️ Limiar de intervenção manual (opcional)"):
-    st.caption("Se o gráfico oficial da ABRASSO mostrar um limiar de intervenção diferente para a idade do "
-               "paciente, informe-o aqui. As faixas do gráfico serão reescaladas proporcionalmente.")
-    usar_limiar_manual = st.checkbox("Usar limiar informado", value=False)
-    limiar_manual = st.number_input("Limiar de intervenção MOF (%)", 0.5, 50.0, 6.0, 0.1) if usar_limiar_manual else None
 
 st.divider()
 
@@ -907,22 +790,21 @@ with col_res:
 
     # 4. Limiares e gráfico ABRASSO
     lim = limiares_abrasso_brasil(idade)
-    fator_manual = (limiar_manual / lim["li"]) if (usar_limiar_manual and limiar_manual and lim["li"] > 0) else 1.0
-    li_pac = round(lim["li"] * fator_manual, 1)
-    lsa_pac = round(lim["lsa"] * fator_manual, 1)
-    vha_pac = round(lim["muito_alto"] * fator_manual, 1)
+    li_pac = lim["li"]
+    lsa_pac = lim["lsa"]
+    vha_pac = lim["muito_alto"]
     lia_pac = min(lim["lia"], li_pac)
-    li_hip_pac = round(lim["li_quadril"] * fator_manual, 1)
-    vha_hip_pac = round(1.6 * lim["li_quadril"] * fator_manual, 1)
+    li_hip_pac = lim["li_quadril"]
+    vha_hip_pac = round(1.6 * lim["li_quadril"], 1)
 
     # Gráficos no formato do FRAX Brasil 2.0: fraturas maiores e fratura de quadril.
     # Como na ABRASSO, o gráfico de quadril só é exibido quando há DMO.
     st.markdown("##### 📈 Probabilidade de Fraturas Maiores (MOF)")
-    st.markdown(gerar_svg_grafico_abrasso(idade, mof_base, mof_plus, usar_dmo, fator_manual, "mof"),
+    st.markdown(gerar_svg_grafico_abrasso(idade, mof_base, mof_plus, usar_dmo, "mof"),
                 unsafe_allow_html=True)
     st.markdown("##### 📈 Probabilidade de Fratura de Quadril")
     if usar_dmo:
-        st.markdown(gerar_svg_grafico_abrasso(idade, hip_base, hip_plus, True, fator_manual, "quadril"),
+        st.markdown(gerar_svg_grafico_abrasso(idade, hip_base, hip_plus, True, "quadril"),
                     unsafe_allow_html=True)
     else:
         st.caption("Sem DMO, o FRAX Brasil 2.0 (ABRASSO) exibe apenas o gráfico de fraturas maiores. "
@@ -969,7 +851,7 @@ with col_res:
     texto_limiares = (f"Intervenção ≥ <b>{li_pac}%</b> | Muito Alto Risco ≥ <b>{vha_pac}%</b>"
                       + (f" | Quadril: intervenção ≥ <b>{li_hip_pac}%</b>, muito alto ≥ <b>{vha_hip_pac}%</b>" if usar_dmo else
                          f" | Faixa DXA: <b>{lia_pac}%</b> a <b>{lsa_pac}%</b>"))
-    origem_limiar = "informado manualmente" if fator_manual != 1.0 else "estimado, modelo híbrido fixo ≥ 70 a"
+    origem_limiar = "FRAX oficial, modelo híbrido fixo ≥ 70 a"
     st.markdown(f"""
     <div style="margin-top:10px; margin-bottom:10px;">
         <div class="badge-risco" style="background-color:{cor_badge};">{categoria}</div>
@@ -1006,10 +888,10 @@ with col_res:
 - Quedas, número de fraturas e discordância coluna–colo: tabela de ajustes do FRAX Brasil 2.0 (ABRASSO, 2024).
 - HAL: +4,7%/mm acima e −3,8%/mm abaixo da média por sexo, só no quadril (Leslie et al., *J Clin Densitom* 2016).
 - DM2: métodos validados por Leslie et al., *JBMR* 2018 (AR = sim, idade +10 anos ou T-score −0,5). O resultado vem do recálculo no site oficial com o parâmetro escolhido (T-score −0,5 recomendado com DMO; AR = Sim sem DMO).
+- Limiares: valores da calculadora FRAX oficial (Brasil) para mulher com IMC 25 — com fratura prévia (limiar de intervenção, fixo a partir dos 70 anos) e sem fatores de risco (limite inferior da faixa amarela), conforme a metodologia NOGG adotada pela ABRASSO. Muito alto risco = 1,6 × limiar, para MOF e quadril.
 
 **Aproximações (⚠️):**
 - TBS: fórmula oficial não publicada; usa HR por DP de McCloskey et al., 2015.
-- Limiares: gerados pela definição NOGG/ABRASSO sobre um modelo interno calibrado às Tabelas 1–2 de Albergaria et al., *Arch Osteoporos* 2023 (aos 65 a: MOF 5,9% e quadril 1,4%, iguais aos publicados). Muito alto risco = 1,6 × limiar, para MOF e quadril.
 
 Todos os ajustes multiplicam a **probabilidade** em 10 anos e apenas **um** é aplicado por vez (FRAXplus/ABRASSO).
 """)
