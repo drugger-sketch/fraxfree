@@ -76,7 +76,7 @@ st.markdown("""
 st.markdown("""
 <div class="main-header">
     <h2>🦴 Calculadora de Risco Osteoporótico (Coorte Brasil)</h2>
-    <p>FRAX Brasil recalibrado (Albergaria et al., 2023), limiares híbridos ABRASSO / FRAX Brasil 2.0, padronização DXA NHANES III e aplicação estrita de fator único (FRAXplus / ABRASSO)</p>
+    <p>Resultado do FRAX Brasil oficial + ajustes FRAXplus / ABRASSO (um fator por vez) + limiares híbridos do FRAX Brasil 2.0</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -117,7 +117,7 @@ def converter_coluna_para_tscore(equipamento: str, valor_dmo: float) -> float:
 
 
 # ==========================================
-# 2. MOTOR BASE (MODO AUTÔNOMO) — RECALIBRADO PARA O FRAX BRASIL 2023
+# 2. MODELO INTERNO (USADO SÓ PARA AS CURVAS DE LIMIAR ABRASSO) — CALIBRADO AO FRAX BRASIL 2023
 # ==========================================
 def interpolar_curva(idade: float, tabela: dict) -> float:
     """Interpolação linear em tabela com chaves a cada 5 anos (40–90)."""
@@ -432,23 +432,12 @@ def gerar_svg_grafico_abrasso(idade_pac: int, valor_base: float, valor_plus: flo
 
 
 # ==========================================
-# INTERFACE PRINCIPAL (SELETOR DE MODO BASE)
+# INTERFACE PRINCIPAL
 # ==========================================
-modo_calculo = st.radio(
-    "Modos de Operação (modo híbrido mais recomendado):",
-    [
-        "1. Autônomo (Aproximação do FRAX Brasil 2023 + Conversão DMO + ajustes)",
-        "2. Híbrido (Inserir resultado da calculadora FRAX oficial + Aplicar ajustes)"
-    ],
-    index=1,
-    horizontal=True
-)
-modo_hibrido = modo_calculo.startswith("2.")
-
-if not modo_hibrido:
-    st.caption("⚠️ O modo autônomo é uma aproximação do FRAX (algoritmo proprietário), calibrada aos dados publicados do "
-               "FRAX Brasil 2023. Pode diferir do valor oficial em alguns pontos percentuais — para decisões clínicas, "
-               "prefira o modo híbrido com o valor do site oficial (gratuito).")
+# Modo único: o FRAX base vem SEMPRE da calculadora oficial (digitado pelo usuário).
+# O motor interno acima é usado apenas para desenhar as curvas de limiar ABRASSO.
+URL_FRAX_OFICIAL = "https://fraxplus.org/calculation-tool"
+URL_FRAX_ABRASSO = "https://abrasso.org.br/frax-brasil/"
 
 # --- Calibração opcional do limiar (barra lateral) ---
 with st.sidebar.expander("⚙️ Limiar de intervenção manual (opcional)"):
@@ -465,20 +454,23 @@ col_frax, col_plus, col_res = st.columns([1.1, 1.25, 1.35], gap="large")
 # COLUNA 1: VARIÁVEIS DO FRAX PADRÃO + DMO COLO FEMORAL
 # ------------------------------------------
 with col_frax:
-    if modo_hibrido:
-        # No modo híbrido o médico começa pelo resultado do FRAX oficial e depois completa os dados
-        st.subheader("📋 1. Resultado FRAX oficial")
-        st.info("Primeiro, insira o resultado do FRAX oficial para o Brasil (frax.shef.ac.uk / fraxplus.org ou "
-                "calculadora da ABRASSO):")
-        mof_manual = st.number_input("Fratura Maior - MOF Oficial (%)", 0.1, 95.0, 14.0, step=0.1)
-        hip_manual = st.number_input("Fratura de Quadril Oficial (%)", 0.1, 90.0, 3.5, step=0.1)
-        if hip_manual > mof_manual:
-            st.warning("O risco de quadril não pode ser maior que o de fratura maior (MOF inclui o quadril). Confira os valores.")
-        st.markdown("---")
-        st.markdown("**Agora complete os dados do paciente** (os mesmos usados no FRAX oficial — servem para os "
-                    "ajustes, os limiares e o gráfico):")
-    else:
-        st.subheader("📋 1. Fatores FRAX Padrão")
+    # O médico começa pelo resultado do FRAX oficial e depois completa os dados do paciente
+    st.subheader("📋 1. Resultado FRAX oficial")
+    b1, b2 = st.columns(2)
+    with b1:
+        st.link_button("🌐 Abrir FRAX oficial", URL_FRAX_OFICIAL, use_container_width=True)
+    with b2:
+        st.link_button("🇧🇷 FRAX Brasil (ABRASSO)", URL_FRAX_ABRASSO, use_container_width=True)
+    st.caption("No site oficial, selecione **América Latina → Brasil**, preencha os dados do paciente e calcule. "
+               "Depois copie os dois resultados para os campos abaixo. A lista de conferência no fim desta coluna "
+               "mostra os dados na ordem do site.")
+    mof_manual = st.number_input("Fratura Maior - MOF Oficial (%)", 0.1, 95.0, 14.0, step=0.1)
+    hip_manual = st.number_input("Fratura de Quadril Oficial (%)", 0.1, 90.0, 3.5, step=0.1)
+    if hip_manual > mof_manual:
+        st.warning("O risco de quadril não pode ser maior que o de fratura maior (MOF inclui o quadril). Confira os valores.")
+    st.markdown("---")
+    st.markdown("**Agora complete os dados do paciente** (os mesmos usados no FRAX oficial — servem para os "
+                "ajustes, os limiares e os gráficos):")
     c1, c2 = st.columns(2)
     with c1:
         idade = st.number_input("Idade (40–90 anos)", min_value=40, max_value=90, value=68)
@@ -534,6 +526,33 @@ with col_frax:
     if usar_dmo and metodo_dmo != "T-Score (NHANES III direto)":
         st.caption("Dica: o T-score do colo impresso no laudo (Lunar/Hologic) já usa NHANES III — se disponível, "
                    "prefira a opção 'T-Score direto'.")
+
+    # Lista de conferência na ordem dos campos da calculadora oficial
+    with st.expander("🔁 Conferência: dados para o FRAX oficial (na ordem do site)", expanded=False):
+        def _sn(v): return "Sim" if v else "Não"
+        if metodo_dmo == "Sem DMO":
+            dmo_site = "deixar em branco (sem DMO)"
+        elif metodo_dmo == "T-Score (NHANES III direto)":
+            dmo_site = f"T-score {t_colo:+.1f}"
+        else:
+            dmo_site = f"{metodo_dmo.split(' (')[0]} — {val_dmo:.3f} g/cm²"
+        st.markdown(
+            f"1. **País:** América Latina → Brasil\n"
+            f"2. **Idade:** {idade} anos · **Sexo:** {sexo}\n"
+            f"3. **Peso:** {peso:.1f} kg · **Altura:** {altura:.1f} cm\n"
+            f"4. **Fratura prévia:** {_sn(frat_prev)}\n"
+            f"5. **Pais com fratura de quadril:** {_sn(pais_quadril)}\n"
+            f"6. **Tabagismo atual:** {_sn(tabagismo)}\n"
+            f"7. **Glicocorticoides:** {_sn(corticoide)} "
+            f"<span style='color:#777'>(≥ 3 meses, ≥ 5 mg/d de prednisolona ou equivalente)</span>\n"
+            f"8. **Artrite reumatoide:** {_sn(ar)}\n"
+            f"9. **Osteoporose secundária:** {_sn(osteop_sec)}"
+            + (" <span style='color:#777'>(ignorada pelo FRAX quando há DMO)</span>" if usar_dmo else "") + "\n"
+            f"10. **Álcool ≥ 3 doses/dia:** {_sn(alcool)}\n"
+            f"11. **DMO do colo femoral:** {dmo_site}",
+            unsafe_allow_html=True
+        )
+        st.caption("Os valores de MOF e quadril digitados acima precisam ter sido calculados com exatamente estes dados.")
 
 
 # ------------------------------------------
@@ -636,12 +655,12 @@ with col_plus:
             metodo_dm = st.radio("Método de ajuste (ABRASSO 2.0 / Leslie et al., 2018):", opcoes_dm)
             st.caption("O FRAXplus usa a duração do DM2 quando há DMO, mas os coeficientes não são públicos; "
                        "os 3 métodos acima são os validados por Leslie 2018 e adotados pela ABRASSO.")
-            if modo_hibrido:
+            if metodo_dm.startswith("Marcar") and ar:
+                st.caption("Artrite reumatoide já está marcada — este método não altera o resultado.")
+            else:
                 st.info("Recalcule no FRAX oficial aplicando o método escolhido e informe o resultado:")
                 dm_mof_oficial = st.number_input("MOF recalculado (%)", 0.0, 95.0, 0.0, 0.1, key="dm_mof")
                 dm_hip_oficial = st.number_input("Quadril recalculado (%)", 0.0, 90.0, 0.0, 0.1, key="dm_hip")
-            elif metodo_dm.startswith("Marcar") and ar:
-                st.caption("Artrite reumatoide já está marcada — este método não altera o resultado.")
 
     # Módulo 7: Comprimento do Eixo do Quadril (HAL)
     with st.expander("7️⃣ Comprimento do Eixo do Quadril (HAL - mm)", expanded=False):
@@ -666,19 +685,7 @@ with col_plus:
 # ==========================================
 # PROCESSAMENTO MATEMÁTICO INDIVIDUAL (ESTRITAMENTE 1 FATOR POR VEZ)
 # ==========================================
-def rodar_motor(idade_m=None, t_colo_m=None, ar_m=None):
-    return calcular_motor_base_brasil(
-        idade if idade_m is None else idade_m, sexo, round(imc, 2), usar_dmo,
-        t_colo if t_colo_m is None else t_colo_m,
-        frat_prev, pais_quadril, tabagismo, corticoide,
-        ar if ar_m is None else ar_m, osteop_sec, alcool
-    )
-
-
-if modo_hibrido:
-    mof_base, hip_base = mof_manual, hip_manual
-else:
-    mof_base, hip_base = rodar_motor()
+mof_base, hip_base = mof_manual, hip_manual
 
 candidatos_plus = []
 
@@ -755,19 +762,9 @@ if dm2 and metodo_dm is not None:
     nome_dm = "Diabetes Tipo 2 (" + ("AR = Sim" if metodo_dm.startswith("Marcar")
                                      else "idade +10a" if metodo_dm.startswith("Somar")
                                      else "T-score −0,5") + ")"
-    if modo_hibrido:
-        if dm_mof_oficial > 0 and dm_hip_oficial > 0:
-            registrar_fator(nome_dm, "Leslie et al., 2018 / ABRASSO 2024",
-                            round(max(dm_mof_oficial, dm_hip_oficial), 1), round(dm_hip_oficial, 1))
-    else:
-        if metodo_dm.startswith("Marcar"):
-            m_dm, h_dm = rodar_motor(ar_m=True)
-        elif metodo_dm.startswith("Somar"):
-            m_dm, h_dm = rodar_motor(idade_m=min(90, idade + 10))
-        else:
-            m_dm, h_dm = rodar_motor(t_colo_m=t_colo - 0.5)
-        if (m_dm, h_dm) != (mof_base, hip_base):
-            registrar_fator(nome_dm, "Leslie et al., 2018 / ABRASSO 2024", m_dm, h_dm)
+    if dm_mof_oficial > 0 and dm_hip_oficial > 0:
+        registrar_fator(nome_dm, "Leslie et al., 2018 / ABRASSO 2024",
+                        round(max(dm_mof_oficial, dm_hip_oficial), 1), round(dm_hip_oficial, 1))
 
 # 7. HAL - Hip Axis Length (Leslie et al., 2016): ajuste bilinear do risco de QUADRIL
 if usar_hal and hal_mm is not None:
@@ -785,7 +782,7 @@ with col_res:
     st.subheader("📊 3. Seleção do fator de maior impacto e Resultado")
 
     # 1. Card FRAX Base
-    rotulo_base = "FRAX BRASIL OFICIAL (SEM MODIFICADORES)" if modo_hibrido else "FRAX BRASIL ESTIMADO (SEM MODIFICADORES)"
+    rotulo_base = "FRAX BRASIL OFICIAL (SEM MODIFICADORES)"
     st.markdown(f"""
     <div class="result-card">
         <div style="font-size:12.5px; color:#555; font-weight:bold;">{rotulo_base}</div>
@@ -951,7 +948,7 @@ with col_res:
         dmo_txt = f"T-score Colo Femoral (NHANES III) = {t_colo:+.2f} DP" if usar_dmo else "Sem DMO informada"
         col_txt = f" | T-score L1-L4 = {t_coluna:+.2f} DP" if (usar_dmo and t_coluna is not None) else ""
         outros_txt = ", ".join([f"{c['nome']} (MOF {c['mof_isolado']:.1f}%)" for c in candidatos_plus]) if candidatos_plus else "Nenhum"
-        origem_base = "FRAX Brasil oficial" if modo_hibrido else "estimativa do FRAX Brasil 2023 (aproximação)"
+        origem_base = "FRAX Brasil oficial"
         resumo_prontuario = (
             f"AVALIAÇÃO DE RISCO DE FRATURA EM 10 ANOS (FRAX BRASIL + AJUSTE FRAXplus/ABRASSO):\n"
             f"- Paciente: {sexo}, {idade} anos, IMC {imc:.1f} kg/m² | {dmo_txt}{col_txt}\n"
@@ -974,8 +971,7 @@ with col_res:
 
 **Aproximações (⚠️):**
 - TBS: fórmula oficial não publicada; usa HR por DP de McCloskey et al., 2015.
-- Modo autônomo: imitação do FRAX calibrada às Tabelas 1–2 de Albergaria et al., *Arch Osteoporos* 2023.
-- Limiares: gerados pela definição NOGG/ABRASSO sobre o motor calibrado (aos 65 a: MOF 5,9% e quadril 1,4%, iguais aos publicados). Muito alto risco = 1,6 × limiar, para MOF e quadril.
+- Limiares: gerados pela definição NOGG/ABRASSO sobre um modelo interno calibrado às Tabelas 1–2 de Albergaria et al., *Arch Osteoporos* 2023 (aos 65 a: MOF 5,9% e quadril 1,4%, iguais aos publicados). Muito alto risco = 1,6 × limiar, para MOF e quadril.
 
 Todos os ajustes multiplicam a **probabilidade** em 10 anos e apenas **um** é aplicado por vez (FRAXplus/ABRASSO).
 """)
